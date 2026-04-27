@@ -23,6 +23,105 @@ HEADERS = {
     ),
 }
 
+CAMERA_SPECS = {
+    "X-T5": [
+        ("Image Sensor", "40.2MP X-Trans CMOS 5 HR BSI"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "Yes - 3.69M-dot OLED, 0.8x"),
+        ("LCD Monitor", "3.0-inch 3-way tilt touchscreen"),
+        ("IBIS", "Yes - 5-axis, up to 7.0 stops"),
+        ("Weather Sealed", "Yes - 56 points"),
+    ],
+    "X-H2": [
+        ("Image Sensor", "40.2MP X-Trans CMOS 5 HR BSI"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "Yes - 5.76M-dot OLED, 0.8x"),
+        ("LCD Monitor", "3.0-inch vari-angle touchscreen"),
+        ("IBIS", "Yes - 5-axis, up to 7.0 stops"),
+        ("Weather Sealed", "Yes"),
+    ],
+    "X-E5": [
+        ("Image Sensor", "40.2MP X-Trans CMOS 5 HR BSI"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "Yes - 2.36M-dot OLED, 0.62x"),
+        ("LCD Monitor", "3.0-inch tilt touchscreen"),
+        ("IBIS", "Yes - 5-axis, up to 7.0 stops"),
+        ("Weather Sealed", "No"),
+    ],
+    "X-S20": [
+        ("Image Sensor", "26.1MP X-Trans CMOS 4 BSI"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "Yes - 2.36M-dot OLED, 0.62x"),
+        ("LCD Monitor", "3.0-inch vari-angle touchscreen"),
+        ("IBIS", "Yes - 5-axis, up to 7.0 stops"),
+        ("Weather Sealed", "Yes"),
+    ],
+    "X-T50": [
+        ("Image Sensor", "40.2MP X-Trans CMOS 5 HR BSI"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "Yes - 2.36M-dot OLED, 0.62x"),
+        ("LCD Monitor", "3.0-inch vari-angle touchscreen"),
+        ("IBIS", "Yes - 5-axis, up to 7.0 stops"),
+        ("Weather Sealed", "No"),
+    ],
+    "X-T30 III": [
+        ("Image Sensor", "26.1MP X-Trans CMOS 4 BSI"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "Yes - 2.36M-dot OLED, 0.62x"),
+        ("LCD Monitor", "3.0-inch tilt touchscreen"),
+        ("IBIS", "No"),
+        ("Weather Sealed", "No"),
+    ],
+    "X-M5": [
+        ("Image Sensor", "26.1MP X-Trans CMOS 4 BSI"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "No"),
+        ("LCD Monitor", "3.0-inch vari-angle touchscreen"),
+        ("IBIS", "No"),
+        ("Weather Sealed", "No"),
+    ],
+    "X-M5 CN": [
+        ("Image Sensor", "26.1MP X-Trans CMOS 4 BSI"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "No"),
+        ("LCD Monitor", "3.0-inch vari-angle touchscreen"),
+        ("IBIS", "No"),
+        ("Weather Sealed", "No"),
+    ],
+    "X-T200": [
+        ("Image Sensor", "24.2MP APS-C Bayer CMOS BSI"),
+        ("Image Processing Engine", "X-Processor 4"),
+        ("EVF", "Yes - 2.36M-dot OLED, 0.62x"),
+        ("LCD Monitor", "3.5-inch vari-angle touchscreen"),
+        ("IBIS", "No"),
+        ("Weather Sealed", "No"),
+    ],
+    "X half": [
+        ("Image Sensor", "18MP 1-inch BSI CMOS (vertical mount)"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "Optical only - 0.38x, no overlays"),
+        ("LCD Monitor", "Rear LCD + sub front screen"),
+        ("IBIS", "No"),
+        ("Weather Sealed", "No"),
+    ],
+    "GFX-50R": [
+        ("Image Sensor", "51.4MP Medium Format CMOS (43.8x32.9mm)"),
+        ("Image Processing Engine", "X-Processor Pro"),
+        ("EVF", "Yes - 3.69M-dot OLED, 0.77x"),
+        ("LCD Monitor", "3.2-inch 2-way tilt touchscreen"),
+        ("IBIS", "No"),
+        ("Weather Sealed", "Yes - dust & moisture resistant"),
+    ],
+    "GFX100RF": [
+        ("Image Sensor", "102MP Medium Format BSI CMOS II (43.8x32.9mm)"),
+        ("Image Processing Engine", "X-Processor 5"),
+        ("EVF", "Yes - 5.76M-dot OLED, 0.84x"),
+        ("LCD Monitor", "3.2-inch 3-way tilt touchscreen"),
+        ("IBIS", "No"),
+        ("Weather Sealed", "Partial - adapter + filter required"),
+    ],
+}
+
 
 def load_local_env():
     # Supports both project-local .env and parent .env.
@@ -109,24 +208,183 @@ def load_variant_details_by_sku(html_text):
     return variant_by_sku
 
 
-def snapshot_for_camera(offers, variant_by_sku):
-    rows = []
-    for offer in offers:
-        if not is_refurbished_in_stock(offer):
+def _extract_specs_from_soup(soup, max_specs=5):
+    specs = []
+    seen_keys = set()
+
+    # Most specific: specs area by known id/anchors.
+    for li in soup.select("#product-attributes li, [id*='product-attributes'] li"):
+        text = li.get_text(" ", strip=True).lstrip("•- ").strip()
+        if not text:
             continue
+        if ":" in text:
+            key, value = [p.strip() for p in text.split(":", 1)]
+        elif " - " in text:
+            key, value = [p.strip() for p in text.split(" - ", 1)]
+        else:
+            # Fallback when bullet is sentence-like.
+            key = f"Spec {len(specs) + 1}"
+            value = text
+        if key and value and key not in seen_keys:
+            specs.append({"key": key, "value": value})
+            seen_keys.add(key)
+        if len(specs) >= max_specs:
+            return specs
+
+    # Generic fallback: definition lists.
+    for dl in soup.select("dl"):
+        for dt, dd in zip(dl.select("dt"), dl.select("dd")):
+            key = dt.get_text(" ", strip=True)
+            value = dd.get_text(" ", strip=True)
+            if key and value and key not in seen_keys:
+                specs.append({"key": key, "value": value})
+                seen_keys.add(key)
+            if len(specs) >= max_specs:
+                return specs
+
+    # Fallback for Fujifilm product pages: derive compact specs from bullet text.
+    bullet_texts = [
+        li.get_text(" ", strip=True).lstrip("•- ").strip()
+        for li in soup.select(".product-info-main li")
+        if li.get_text(" ", strip=True).strip()
+    ]
+    derived = []
+    for text in bullet_texts:
+        lower = text.lower()
+        if "sensor" in lower and not any(s["key"] == "Sensor" for s in derived):
+            derived.append({"key": "Sensor", "value": text})
+        elif (
+            ("in-body image stabilization" in lower or "ibis" in lower or "stops" in lower)
+            and not any(s["key"] == "Stabilisation" for s in derived)
+        ):
+            derived.append({"key": "Stabilisation", "value": text})
+        elif (
+            ("6.2k" in lower or "8k" in lower or "4k" in lower or "video" in lower)
+            and not any(s["key"] == "Video" for s in derived)
+        ):
+            derived.append({"key": "Video", "value": text})
+        elif ("shutter" in lower and not any(s["key"] == "Shutter" for s in derived)):
+            derived.append({"key": "Shutter", "value": text})
+        elif ("evf" in lower and not any(s["key"] == "EVF" for s in derived)):
+            derived.append({"key": "EVF", "value": text})
+        if len(derived) >= max_specs:
+            break
+
+    if derived:
+        return derived[:max_specs]
+
+    return specs
+
+
+def _hardcoded_specs(camera_name, max_specs=5):
+    entries = CAMERA_SPECS.get(camera_name, [])
+    specs = [{"key": key, "value": value} for key, value in entries if key and value]
+    return specs[:max_specs]
+
+
+def fetch_product_page_details(product_url):
+    if not product_url:
+        return {"product_url": "", "image_url": "", "specs": []}
+    try:
+        response = requests.get(product_url, headers=HEADERS, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException:
+        return {"product_url": product_url, "image_url": "", "specs": []}
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    image_url = ""
+    og_image = soup.select_one('meta[property="og:image"]')
+    if og_image and og_image.get("content"):
+        image_url = og_image.get("content", "").strip()
+    if not image_url:
+        img = soup.select_one("img.product-image-photo, img.fotorama__img, img")
+        if img and img.get("src"):
+            image_url = img.get("src", "").strip()
+
+    return {
+        "product_url": product_url,
+        "image_url": image_url,
+        "specs": _extract_specs_from_soup(soup, max_specs=5),
+    }
+
+
+def fetch_image_for_url(url, image_cache):
+    if not url:
+        return ""
+    cached = image_cache.get(url)
+    if cached is not None:
+        return cached
+    try:
+        response = requests.get(url, headers=HEADERS, timeout=20)
+        response.raise_for_status()
+    except requests.RequestException:
+        image_cache[url] = ""
+        return ""
+
+    soup = BeautifulSoup(response.text, "html.parser")
+    image_url = ""
+    og_image = soup.select_one('meta[property="og:image"]')
+    if og_image and og_image.get("content"):
+        image_url = og_image.get("content", "").strip()
+    if not image_url:
+        img = soup.select_one("img.product-image-photo, img.fotorama__img, img")
+        if img and img.get("src"):
+            image_url = img.get("src", "").strip()
+    image_cache[url] = image_url
+    return image_url
+
+
+def snapshot_for_camera(camera_name, offers, variant_by_sku, page_details_cache):
+    product_url = next((o.get("url", "") for o in offers if o.get("url")), "")
+    page_details = page_details_cache.get(product_url)
+    if page_details is None:
+        page_details = fetch_product_page_details(product_url)
+        page_details_cache[product_url] = page_details
+
+    image_cache = page_details_cache.setdefault("_offer_image_cache", {})
+    rows = []
+    all_rows = []
+    for offer in offers:
         sku = str(offer.get("sku", ""))
         vd = variant_by_sku.get(sku, {})
-        rows.append(
-            {
-                "sku": sku,
-                "price": offer.get("price"),
-                "url": offer.get("url", ""),
-                "color": vd.get("color", "Unknown"),
-                "style": vd.get("style", "Unknown"),
-            }
-        )
+        offer_url = offer.get("url", "")
+        raw_style = vd.get("style", "Unknown")
+        normalized_style = raw_style.strip() if isinstance(raw_style, str) else "Unknown"
+        if not normalized_style or normalized_style.lower() == "unknown":
+            normalized_style = "Body Only"
+        row = {
+            "sku": sku,
+            "price": offer.get("price"),
+            "url": offer_url,
+            "color": vd.get("color", "Unknown"),
+            "style": normalized_style,
+            "image_url": fetch_image_for_url(offer_url, image_cache),
+            "in_stock": bool(is_refurbished_in_stock(offer)),
+        }
+        all_rows.append(row)
+        if row["in_stock"]:
+            rows.append(row)
     skus = sorted(r["sku"] for r in rows if r["sku"])
-    return {"refurb_in_stock": len(skus) > 0, "skus": skus, "options": rows}
+    available_colors = sorted(
+        {r["color"] for r in all_rows if r.get("color") and r.get("color") != "Unknown"}
+    )
+    available_styles = sorted(
+        {r["style"] for r in all_rows if r.get("style") and r.get("style") != "Unknown"}
+    )
+    specs = _hardcoded_specs(camera_name, max_specs=5)
+    if not specs:
+        specs = page_details.get("specs", [])
+    return {
+        "refurb_in_stock": len(skus) > 0,
+        "skus": skus,
+        "options": rows,
+        "all_options": all_rows,
+        "available_colors": available_colors,
+        "available_styles": available_styles,
+        "product_url": page_details.get("product_url", ""),
+        "image_url": page_details.get("image_url", ""),
+        "specs": specs,
+    }
 
 
 def describe_change(camera_name, prev_snap, curr_snap):
@@ -204,6 +462,28 @@ def send_discord_alert_if_needed(
         return False, f"Discord alert failed: {exc}"
 
 
+def build_ai_placeholder(changes_by_camera):
+    """Placeholder hook for future Claude/LLM integration."""
+    provider = os.getenv("AI_PROVIDER", "claude").strip().lower() or "claude"
+    model = os.getenv("AI_MODEL", "claude-3-5-sonnet").strip() or "claude-3-5-sonnet"
+    api_key_configured = bool(
+        os.getenv("CLAUDE_API_KEY", "").strip() or os.getenv("ANTHROPIC_API_KEY", "").strip()
+    )
+    candidate_lines = build_alert_lines(changes_by_camera)
+    return {
+        "enabled": False,
+        "provider": provider,
+        "model": model,
+        "api_key_configured": api_key_configured,
+        "summary": "",
+        "message": (
+            "AI summary placeholder only. "
+            "Wire your provider SDK/API call here when ready."
+        ),
+        "candidate_change_count": len(candidate_lines),
+    }
+
+
 def fetch_catalog():
     response = requests.get(URL, headers=HEADERS, timeout=30)
     response.raise_for_status()
@@ -242,9 +522,15 @@ def run_check(
 
     checked_at = datetime.now().astimezone().isoformat()
     previous = load_previous_state(DB_PATH)
+    page_details_cache = {}
 
     current = {
-        name: snapshot_for_camera(products_by_name.get(name, []), variant_by_sku)
+        name: snapshot_for_camera(
+            name,
+            products_by_name.get(name, []),
+            variant_by_sku,
+            page_details_cache,
+        )
         for name in selected_cameras
     }
     prev_cameras = (previous or {}).get("cameras", {})
@@ -270,6 +556,7 @@ def run_check(
         discord_notifications=discord_notifications,
         only_when_change=only_when_change,
     )
+    ai_summary = build_ai_placeholder(changes_by_camera)
 
     return {
         "checked_at": checked_at,
@@ -285,6 +572,7 @@ def run_check(
             "notifications": discord_notifications,
             "only_when_change": only_when_change,
         },
+        "ai_summary": ai_summary,
     }
 
 

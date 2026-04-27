@@ -35,6 +35,22 @@ def init_db(db_path):
             )
             """
         )
+        existing_columns = {
+            row["name"]
+            for row in conn.execute("PRAGMA table_info(camera_snapshots)").fetchall()
+        }
+        if "product_url" not in existing_columns:
+            conn.execute(
+                "ALTER TABLE camera_snapshots ADD COLUMN product_url TEXT NOT NULL DEFAULT ''"
+            )
+        if "image_url" not in existing_columns:
+            conn.execute(
+                "ALTER TABLE camera_snapshots ADD COLUMN image_url TEXT NOT NULL DEFAULT ''"
+            )
+        if "specs_json" not in existing_columns:
+            conn.execute(
+                "ALTER TABLE camera_snapshots ADD COLUMN specs_json TEXT NOT NULL DEFAULT '[]'"
+            )
 
 
 def load_previous_state(db_path):
@@ -48,7 +64,7 @@ def load_previous_state(db_path):
 
         rows = conn.execute(
             """
-            SELECT camera_name, refurb_in_stock, skus_json, options_json
+            SELECT camera_name, refurb_in_stock, skus_json, options_json, product_url, image_url, specs_json
             FROM camera_snapshots
             WHERE run_id = ?
             """,
@@ -61,6 +77,9 @@ def load_previous_state(db_path):
                 "refurb_in_stock": bool(row["refurb_in_stock"]),
                 "skus": json.loads(row["skus_json"]),
                 "options": json.loads(row["options_json"]),
+                "product_url": row["product_url"],
+                "image_url": row["image_url"],
+                "specs": json.loads(row["specs_json"]),
             }
 
         return {
@@ -88,8 +107,8 @@ def save_state(db_path, checked_at, source_url, selected_cameras, cameras):
             conn.execute(
                 """
                 INSERT INTO camera_snapshots
-                (run_id, camera_name, refurb_in_stock, skus_json, options_json)
-                VALUES (?, ?, ?, ?, ?)
+                (run_id, camera_name, refurb_in_stock, skus_json, options_json, product_url, image_url, specs_json)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     run_id,
@@ -97,6 +116,9 @@ def save_state(db_path, checked_at, source_url, selected_cameras, cameras):
                     1 if snapshot.get("refurb_in_stock") else 0,
                     json.dumps(snapshot.get("skus", [])),
                     json.dumps(snapshot.get("options", [])),
+                    snapshot.get("product_url", ""),
+                    snapshot.get("image_url", ""),
+                    json.dumps(snapshot.get("specs", [])),
                 ),
             )
 
