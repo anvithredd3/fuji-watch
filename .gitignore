@@ -9,7 +9,7 @@ wheels/
 # Virtual environments
 .venv
 
-# Local run history and debug dumps
-check_state.json
-page_snapshot.html
-page_jsonld.json
+# Local runtime and debug data
+data/*.db
+data/page_snapshot.html
+data/page_jsonld.json
