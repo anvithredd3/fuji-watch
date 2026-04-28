@@ -1,38 +1,40 @@
 # Fuji Refurb Watch
 
-A Streamlit dashboard + Python checker that monitors Fujifilm refurbished camera stock, stores local run history in SQLite, and optionally sends Discord alerts for meaningful stock changes.
+Fuji Refurb Watch is a Streamlit dashboard plus a Python checker that monitors Fujifilm refurbished camera stock, stores local run history in SQLite, and can send Discord alerts.
 
-## What This Tool Does
+## What It Does
 
-- Fetches the Fujifilm refurbished camera listing page.
-- Detects refurbished in-stock options by SKU (including variant info like color/style).
-- Saves each run locally to SQLite (`data/fuji_watch.db`).
-- Shows a dashboard with:
-  - Current stock status by camera (in-stock first, sorted by SKU count)
-  - Styled camera cards (images, specs, variant tags, feature badges)
-  - Stock-change highlights since the previous run
-  - Calendar of historical check dates
-- Sends Discord alerts when configured (change-only or every run mode).
+- Fetches Fujifilm refurbished camera listing data.
+- Detects in-stock refurbished options by SKU and variant.
+- Tracks changes versus previous run.
+- Stores run history in `data/fuji_watch.db`.
+- Provides a dashboard with stock tables, camera cards, change feed, history calendar, and AI Q&A.
+- Supports AI responses via Claude or ChatGPT API.
 
-## Project Structure
+## Project Structure (Package-Native)
 
 - `scripts/checker.py`  
-  Core scraping + comparison + persistence flow (`run_check`).
-- `scripts/streamlit_app.py`  
-  Streamlit UI, card rendering, history calendar, and user controls.
-- `scripts/storage_sqlite.py`  
-  SQLite schema/init + save/load history/state helpers.
-- `data/fuji_watch.db`  
-  Local runtime database (auto-created).
-- `requirements.txt` / `pyproject.toml`  
-  Dependencies.
+  Orchestrator and shared entrypoint used by UI and CLI.
+
+- `scripts/backend/`  
+  Backend/data logic:
+  - `catalog.py` (fetch/parse catalog, variants, images)
+  - `camera_specs.py` (hardcoded camera specs)
+  - `alerts.py` (change detection + Discord alert dispatch)
+  - `ai_service.py` (Claude/OpenAI provider routing + prompting)
+  - `storage_sqlite.py` (SQLite persistence)
+
+- `scripts/ui/`  
+  UI logic:
+  - `streamlit_app.py` (main Streamlit app)
+  - `ui_camera_cards.py` (camera card renderer)
 
 ## Requirements
 
-- Python 3.10+ recommended
-- `requests`, `bs4`, `streamlit`, `streamlit-calendar`
+- Python 3.13+ (matches `pyproject.toml`)
+- Dependencies from `requirements.txt`
 
-Install with your preferred method:
+Install:
 
 ```bash
 pip install -r requirements.txt
@@ -44,86 +46,68 @@ or:
 uv sync
 ```
 
-## Run the App
+## Run Commands
 
 From project root:
 
 ```bash
-PYTHONPATH="scripts" streamlit run scripts/streamlit_app.py
+PYTHONPATH="." streamlit run scripts/ui/streamlit_app.py
 ```
 
-## Run a Direct Check (without UI)
+Direct checker run:
 
 ```bash
-PYTHONPATH="scripts" python -c "from checker import run_check; print(run_check(discord_notifications=False))"
+PYTHONPATH="." python scripts/checker.py
 ```
 
-## Discord Alerts
+If using local virtualenv explicitly:
 
-Set webhook in `.env`:
+```bash
+PYTHONPATH="." .venv/bin/streamlit run scripts/ui/streamlit_app.py
+PYTHONPATH="." .venv/bin/python scripts/checker.py
+```
+
+## Environment Variables
+
+Create/update `.env` as needed:
 
 ```env
+# Discord (optional)
 DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
-```
 
-In the UI:
-- `discord notifications`: enable/disable sending
-- `only when change`: send only alert-worthy changes (`True`) or send every run summary (`False`)
+# AI defaults (optional)
+AI_PROVIDER=claude      # claude | chatgpt
+AI_MODEL=claude-3-5-sonnet-latest
 
-## AI Placeholder (Claude or Similar)
-
-A non-invasive placeholder hook is available in `scripts/checker.py`:
-- Function: `build_ai_placeholder(changes_by_camera)`
-- Result payload included in `run_check(...)` output as `ai_summary`
-- Current behavior: no API call is made yet (`enabled: False`)
-
-Optional environment variables for future wiring:
-
-```env
-AI_PROVIDER=claude
-AI_MODEL=claude-3-5-sonnet
+# Claude
 CLAUDE_API_KEY=...
 # or
 ANTHROPIC_API_KEY=...
+
+# OpenAI / ChatGPT API
+OPENAI_API_KEY=...
 ```
 
-When you are ready to integrate, replace the placeholder body with a real SDK/API call and set `summary` from model output.
+## AI Assistant Notes
 
-## Camera Specs Source
+- Sidebar lets you choose provider/model.
+- Chat panel supports compact/expanded mode and scrollable history.
+- AI answers are grounded in the latest run context (stock + specs loaded in app).
 
-Specs shown in cards are currently based on a curated hardcoded dictionary in `scripts/checker.py` (`CAMERA_SPECS`) for consistency and speed.
+## Data and Privacy
 
-Displayed card specs:
-- Image Sensor
-- Processor
-- LCD Monitor
-
-Feature badges (Yes/No style):
-- EVF
-- IBIS
-- Weather Sealed
-
-## Card UI Notes
-
-- Variant pills (Color/Style) are built from currently in-stock options only.
-- If a camera is out of stock, variant pills are hidden.
-- Color indicator dots appear in the image area for recognized colors.
-- Card iframe height is calculated dynamically from card count and grid assumptions, with ResizeObserver fallback adjustment.
-
-## Data & Privacy
-
-- All run history is stored locally in SQLite (`data/fuji_watch.db`).
-- No cloud database is required.
-- Only outbound requests are to Fujifilm pages and optional Discord webhook.
+- All history is local in `data/fuji_watch.db`.
+- Outbound network calls are to:
+  - Fujifilm catalog/product pages
+  - Optional Discord webhook
+  - Optional AI provider APIs (Claude/OpenAI)
 
 ## Troubleshooting
 
-- If imports appear unresolved in editor but app runs fine, it may be the local interpreter selection.
-- If Streamlit layout looks stale after CSS/HTML tweaks, hard refresh browser or restart Streamlit.
-- If Discord alerts do not send, verify `DISCORD_WEBHOOK_URL` and UI toggles.
-
-## Roadmap Ideas
-
-- Move card renderer into a dedicated `camera_cards.py` module.
-- Add configurable card density presets (2/3/4 columns).
-- Add tests for parsing + change-detection logic.
+- `ModuleNotFoundError` for Streamlit-related packages:
+  - reinstall dependencies with `pip install -r requirements.txt`
+  - ensure interpreter points to project venv (`.venv/bin/python`)
+- Imports failing after refactor:
+  - run commands with `PYTHONPATH="."` from project root
+- UI appears stale after styling updates:
+  - restart Streamlit and hard refresh browser
