@@ -230,6 +230,7 @@ def _render_ai_assistant(result):
     checked_label = checked_at[11:16] if isinstance(checked_at, str) and len(checked_at) >= 16 else "--:--"
     provider = st.session_state.get("ai_provider", "claude")
     model = st.session_state.get("ai_model", DEFAULT_AI_MODELS.get(provider, ""))
+    reasoning_style = st.session_state.get("ai_reasoning_style", "balanced")
     assistant_label = "CLAUDE" if provider == "claude" else "CHATGPT"
     chat_mode = st.session_state.get("ai_chat_mode", "Compact")
 
@@ -271,6 +272,7 @@ def _render_ai_assistant(result):
                 current=current,
                 provider=provider,
                 model=model,
+                reasoning_style=reasoning_style,
             )
         if st.session_state["ai_messages"] and st.session_state["ai_messages"][-1][0] == "assistant":
             st.session_state["ai_messages"][-1] = ("assistant", answer["message"])
@@ -394,6 +396,16 @@ st.session_state["ai_model"] = st.sidebar.text_input(
     "model",
     value=st.session_state.get("ai_model", model_default_for_provider),
     help="Examples: claude-3-5-sonnet-latest, gpt-4o-mini, gpt-4.1",
+)
+st.session_state["ai_reasoning_style"] = st.sidebar.selectbox(
+    "reasoning style",
+    options=["concise", "balanced", "deep"],
+    index=["concise", "balanced", "deep"].index(
+        st.session_state.get("ai_reasoning_style", "balanced")
+        if st.session_state.get("ai_reasoning_style", "balanced") in {"concise", "balanced", "deep"}
+        else "balanced"
+    ),
+    help="Controls response depth and level of tradeoff detail.",
 )
 st.session_state["ai_chat_mode"] = st.sidebar.radio(
     "chat panel",

@@ -8,6 +8,7 @@ DEFAULT_AI_MODELS = {
     "claude": "claude-3-5-sonnet-latest",
     "chatgpt": "gpt-4o-mini",
 }
+REASONING_STYLES = {"concise", "balanced", "deep"}
 
 
 def build_ai_placeholder(changes_by_camera):
@@ -86,13 +87,30 @@ def _camera_context_lines(selected_cameras, current):
     return lines
 
 
-def _build_llm_prompt(question, selected_cameras, current):
+def _normalize_reasoning_style(reasoning_style):
+    style = (reasoning_style or "").strip().lower()
+    if style in REASONING_STYLES:
+        return style
+    return "balanced"
+
+
+def _style_instruction(reasoning_style):
+    style = _normalize_reasoning_style(reasoning_style)
+    if style == "concise":
+        return "Use 3-4 bullets max and give one direct recommendation.Keep it under 50 words"
+    if style == "deep":
+        return "Use 6-8 bullets, include tradeoffs, uncertainty, and one alternative option."
+    return "Use 4-6 bullets and include one key tradeoff. Under words"
+
+
+def _build_llm_prompt(question, selected_cameras, current, reasoning_style):
     in_stock = [c for c in selected_cameras if current.get(c, {}).get("refurb_in_stock")]
     context_lines = _camera_context_lines(selected_cameras, current)
+    style = _normalize_reasoning_style(reasoning_style)
     return (
         "You are helping a buyer choose among Fujifilm refurbished cameras.\n"
         "Only use the provided context. If data is missing, state that clearly.\n"
-        "Keep answer concise (4-8 bullets max) and practical.\n\n"
+        f"Reasoning style: {style}. {_style_instruction(style)}\n\n"
         f"Question: {question.strip()}\n\n"
         f"In-stock cameras right now ({len(in_stock)}): "
         + (", ".join(in_stock) if in_stock else "None")
@@ -150,7 +168,7 @@ def _call_chatgpt_api(api_key, model, system_prompt, user_prompt):
     return str(choices[0].get("message", {}).get("content", "")).strip()
 
 
-def ask_ai_about_stock(question, selected_cameras, current, provider=None, model=None):
+def ask_ai_about_stock(question, selected_cameras, current, provider=None, model=None, reasoning_style="balanced"):
     user_question = (question or "").strip()
     if not user_question:
         return {
@@ -175,7 +193,8 @@ def ask_ai_about_stock(question, selected_cameras, current, provider=None, model
         "Ground every answer in provided stock/spec context only. "
         "If comparing options, be explicit about tradeoffs and uncertainty."
     )
-    user_prompt = _build_llm_prompt(user_question, selected_cameras, current)
+    style = _normalize_reasoning_style(reasoning_style)
+    user_prompt = _build_llm_prompt(user_question, selected_cameras, current, style)
     try:
         if settings["provider"] == "claude":
             answer = _call_claude_api(settings["api_key"], settings["model"], system_prompt, user_prompt)
