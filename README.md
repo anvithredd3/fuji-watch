@@ -1,6 +1,6 @@
-# Fuji Refurb Watch
+# Fujifilm Refurb Watch
 
-Fuji Refurb Watch is a Streamlit dashboard plus a Python checker that monitors Fujifilm refurbished camera stock, stores local run history in SQLite, and can send Discord alerts.
+Fujifilm Refurb Watch is a Streamlit dashboard plus a Python checker that monitors Fujifilm refurbished camera stock, stores local run history in SQLite, and can send Discord alerts.
 
 ## What It Does
 
