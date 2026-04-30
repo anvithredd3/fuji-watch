@@ -14,6 +14,7 @@ from scripts.checker import (
     resolve_ai_settings,
     run_check,
 )
+from scripts.backend.catalog import CatalogFetchError, URL
 from scripts.ui.ui_camera_cards import render_camera_cards
 
 TE_CSS = """
@@ -418,11 +419,16 @@ if st.button("Run Fresh Check", type="primary"):
     if not selected_cameras:
         st.warning("Select at least one camera before running a check.")
     else:
-        st.session_state["latest_result"] = run_check(
-            cameras=selected_cameras,
-            discord_notifications=discord_notifications,
-            only_when_change=only_when_change,
-        )
+        try:
+            st.session_state["latest_result"] = run_check(
+                cameras=selected_cameras,
+                discord_notifications=discord_notifications,
+                only_when_change=only_when_change,
+            )
+        except CatalogFetchError as exc:
+            st.error(
+                f"{exc} Source: {URL}"
+            )
 
 if "latest_result" not in st.session_state:
     st.info("Click 'Run Fresh Check' to fetch the page and load current status.")

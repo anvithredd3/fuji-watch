@@ -9,7 +9,7 @@ from scripts.backend.ai_service import (
     resolve_ai_settings,
 )
 from scripts.backend.alerts import describe_change, send_discord_alert_if_needed
-from scripts.backend.catalog import URL, fetch_catalog, snapshot_for_camera
+from scripts.backend.catalog import CatalogFetchError, URL, fetch_catalog, snapshot_for_camera
 from scripts.backend.storage_sqlite import get_history, load_previous_state, save_state
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -117,7 +117,11 @@ def run_check(
 
 
 def main():
-    result = run_check()
+    try:
+        result = run_check()
+    except CatalogFetchError as exc:
+        print(f"\nCatalog fetch failed: {exc}")
+        return
     print(f"\nCheck time (Local): {result['checked_at']}")
     if result["previous_checked_at"]:
         print(f"Previous check (Local): {result['previous_checked_at']}")

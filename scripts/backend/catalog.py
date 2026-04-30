@@ -16,6 +16,10 @@ HEADERS = {
 }
 
 
+class CatalogFetchError(RuntimeError):
+    """Raised when the Fujifilm catalog cannot be fetched or parsed."""
+
+
 def load_item_list_products(soup):
     products = {}
     for script_tag in soup.select('script[type="application/ld+json"]'):
@@ -171,9 +175,18 @@ def snapshot_for_camera(camera_name, offers, variant_by_sku, image_cache):
 
 
 def fetch_catalog():
-    response = requests.get(URL, headers=HEADERS, timeout=30)
-    response.raise_for_status()
+    try:
+        response = requests.get(URL, headers=HEADERS, timeout=30)
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        raise CatalogFetchError(
+            "Unable to fetch Fujifilm refurb catalog. Check your internet or try again."
+        ) from exc
     soup = BeautifulSoup(response.text, "html.parser")
     products_by_name = load_item_list_products(soup)
     variant_by_sku = load_variant_details_by_sku(response.text)
+    if not products_by_name:
+        raise CatalogFetchError(
+            "Catalog loaded but no camera listings were found. The site layout may have changed."
+        )
     return products_by_name, variant_by_sku
